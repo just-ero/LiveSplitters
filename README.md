@@ -24,5 +24,8 @@ Things that'd have made things faster for me initially: realizing that the hexdu
 
 If you're curious, some handy tricks I know are that VS Code uses `CTRL + D` to select similar text for multiline editing, MSVC's equivalent (though never seemingly mentioned) is `CTRL + SHIFT + .` `CTRL + LEFT ALT + ARROW UP/DOWN` in MSVC allows to add a cursor up or down a line. I could've used this when writing the script but I was just playring around in notepad++. I've no idea, but I'm fairly certain notepad++ may have multiline editing as well.
 
+# DotPeek
+dotpeek pretty much will do the heavy lifting of all this for I believe .NET related things, I'm not clear on the relationship between C# .Net and etc..., what I do know is that it will effectively extract all the metadata information about structs and source code much like cutter will, but apparently C# / .NET loves storing runtime type information for reflection purposes, which effectively means provided you can work out the size of a type, you can work out offsets.
 
+For unity apparently the mono library might've been integrated with this information w/ "tokens" which are visible in dotpeek, or perhaps "tokens" a C# thing. Since mono is open source, you can reverse engineer any calls in the mono-2.0~.dll, which appears to be integral to how the Unity game engine works as a whole. Effecitvely you can reach pretty much every useful struct in Unity by emulating some mono function calls and grabbing some tokens.
 
