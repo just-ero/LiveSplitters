@@ -2,9 +2,19 @@ state("Inscryption") {
 	
 }
 
+state("Inscryption", "") {
+	
+}
+
+state("Inscryption", "(Steam) Build ID: 7611267") {
+	
+}
+
 startup {
 	// Add Events from dotpeeking Assembly-CSharp SaveManager > SaveFile > StoryEvent [DiskCardGame.StoryEvent]
 	print("Starting up!");
+	vars.splitter_failed = false;
+
 	vars.event_names = new string[] {
 		"BasicTutorialCompleted", // story_event_0 etc...
 		"TutorialRunCompleted",
@@ -245,13 +255,42 @@ startup {
 	}
 
 	vars.last_play_time = 0.0f;
+
+	Func<ProcessModuleWow64Safe, string> CalcModuleHash = (module) => {
+		byte[] exeHashBytes = new byte[0];
+		using (var sha = System.Security.Cryptography.MD5.Create())
+		{
+			using (var s = File.Open(module.FileName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+			{
+				exeHashBytes = sha.ComputeHash(s);
+			}
+		}
+		var hash = exeHashBytes.Select(x => x.ToString("X2")).Aggregate((a, b) => a + b);
+		return hash;
+	};
+	vars.CalcModuleHash = CalcModuleHash;
 }
 
 init
 {
 	print("Running Init!");
 	var DLL = modules.First(mod => mod.ModuleName.StartsWith("mono"));
-	
+	var module = modules.Single(mod => String.Equals(mod.ModuleName, "Inscryption.exe", StringComparison.OrdinalIgnoreCase));
+
+	var moduleSize = module.ModuleMemorySize;
+
+	var hash = vars.CalcModuleHash(module);
+	//assumes this build
+	if (hash == "637A4085C69711BC277DBA104947E84E") {
+		version = "(Steam) Build ID: 7611267";
+	} else {
+		version = game.Is64Bit() ? "(x86) " + hash : "(x64) " + hash;
+	}
+
+	vars.sb.Clear();
+	vars.sb.AppendFormat("Game Info: size[{0}] {1}\nHash: {2}\nVersion: {3}", module.ModuleMemorySize, module.ModuleName, hash, version);
+	print(vars.sb.ToString());
+
 	int pointer_size          = 0x04;
 	int loaded_imgs_hash_addr = 0x003a43ec;
 
@@ -336,10 +375,19 @@ init
 	
 	vars.sb.AppendFormat("SaveManager: {0}\n", vars.save_manager_game_ptr);
 
-	//vars.playtime = new DeepPointer(vars.save_manager_game_ptr + 0x10, 0x44);
+	// should be able to retry
+	if (vars.save_manager_game_ptr == IntPtr.Zero && loaded_images_internaltable != IntPtr.Zero) {
+		throw new NullReferenceException();
+	} else if (vars.save_manager_game_ptr == IntPtr.Zero) { // this is bad
+		vars.sb.AppendFormat("Missing Images Hash Table! Disabling AutoSplitter\n", vars.save_manager_game_ptr);
+		print(vars.sb.ToString());
+		vars.sb.clear();
+		vars.splitter_failed = true;
+		return;
+	}
+
 	//vars.storyEvents = new DeepPointer(vars.save_manager_game_ptr + 0x10, 0x0C);
 	//vars.dialogueData = new DeepPointer(vars.save_manager_game_ptr + 0x10, 0x10);
-	//vars.completed_events_ptr   = new DeepPointer(vars.save_manager_game_ptr + 0x10, 0xC, 0x8, 0x8);
 	//vars.completed_events_count = new DeepPointer(vars.save_manager_game_ptr + 0x10, 0xC, 0x8, 0xC);
 	vars.completed_events_ptr = new DeepPointer(vars.save_manager_game_ptr + 0x10, 0x0C, 0x08, 0x08);
 	vars.dialogue_events_ptr  = new DeepPointer(vars.save_manager_game_ptr + 0x10, 0x10, 0x08, 0x08);
@@ -363,6 +411,19 @@ init
 
 	//print out everything interesting in one go
 	print(vars.sb.ToString());
+}
+
+update {
+	return !vars.splitter_failed;
+}
+
+gameTime {
+	TimeSpan play_time = TimeSpan.FromSeconds((double)vars.play_time.Deref<float>(game));
+	return play_time;
+}
+
+isLoading {
+	return true;
 }
 
 start {
@@ -439,7 +500,7 @@ split {
 		int processed_events = 0;
 		vars.sb.Clear();
 		bool moon_events_enabled = settings["moon_events"];
-		bool permanent_events_enabled = settings["permanent_events"];
+
 		for (int i = (vars.old_events_count*4); i < event_bytes_count; i += 4) {
 			processed_events++;
 			int event_id = BitConverter.ToInt32(data_array, i);
