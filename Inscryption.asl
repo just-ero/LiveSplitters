@@ -377,11 +377,13 @@ init
 
 	// should be able to retry
 	if (vars.save_manager_game_ptr == IntPtr.Zero && loaded_images_internaltable != IntPtr.Zero) {
-		throw new NullReferenceException();
+		print(vars.sb.ToString());
+		vars.sb.Clear();
+		throw new NullReferenceException("Cannot Deref save_manager_game_ptr");
 	} else if (vars.save_manager_game_ptr == IntPtr.Zero) { // this is bad
 		vars.sb.AppendFormat("Missing Images Hash Table! Disabling AutoSplitter\n", vars.save_manager_game_ptr);
 		print(vars.sb.ToString());
-		vars.sb.clear();
+		vars.sb.Clear();
 		vars.splitter_failed = true;
 		return;
 	}
