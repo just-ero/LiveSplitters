@@ -2109,6 +2109,7 @@ init
 	
 	//print out everything interesting in one go
 	print(vars.sb.ToString());
+	vars.sb.Clear();
 }
 
 update {
@@ -2305,7 +2306,7 @@ split {
 	//print(vars.sb.ToString());
 	//vars.sb.Clear();
 	
-	if (true || (new_dialogues_since_last > 0)) {
+	if (new_dialogues_since_last > 0) {
 		int array_access_offset = (vars.is_64bit_build != 0) ? 0x20 : 0x10;
 		// read the array of events, as pointed out although we'd like to avoid allocating...all of these things
 		// allocate, why? who knows.
@@ -2316,7 +2317,7 @@ split {
 
 		if (!read) { // if we can't read the data for some reason...just return false
 			vars.sb.Clear();
-			vars.sb.AppendFormat("couldn't read events!: {0}\n",completed_events_items);
+			vars.sb.AppendFormat("couldn't read dialogue!: {0}\n",completed_events_items);
 			print(vars.sb.ToString());
 			return split;
 		}
@@ -2326,13 +2327,24 @@ split {
 
 		int processed_dialogues = 0; //(vars.old_dialogue_count*dialog_event_size)
 		if (vars.is_64bit_build != 0) {
-			//TODO:
+			//TODO: handle x64 bit builds if any show up
 			for (int i = (vars.old_dialogue_count*dialog_event_size); i < dialog_bytes_count; i+=dialog_event_size) {
 				processed_dialogues++;
 				IntPtr event_save_data_ptr = (IntPtr)BitConverter.ToInt64(data_array, i);
-				//vars.sb.AppendFormat("dialog_{0}: {1}\n", processed_dialogues, event_save_data_ptr);
-				//?
-				break;
+
+				byte[] temp;
+				bool ptr_read = game.ReadBytes(event_save_data_ptr, 0x1C, out temp);
+
+				IntPtr str_ptr = (IntPtr)BitConverter.ToInt64(temp, 2*pointer_size);
+				vars.sb.Clear();
+				game.ReadString(str_ptr+(2*pointer_size+0x4), (StringBuilder)vars.sb);
+				string temp_str = vars.sb.ToString();
+				bool seen = vars.previously_seen_events.Contains(temp_str);
+				if (!seen && settings[temp_str]) {
+					vars.previously_seen_events.Add(temp_str);
+					split = true;
+					break;
+				}
 			}
 			//print(vars.sb.ToString());
 			//vars.sb.Clear();
@@ -2347,8 +2359,6 @@ split {
 				//2 ptrs?
 				IntPtr str_ptr = (IntPtr)BitConverter.ToInt32(temp, 0x08);
 
-				//int str_len = game.ReadValue<int>(str_ptr+0x08);
-				//bool str_read = game.ReadBytes(str_ptr+0x0C, str_len, out temp);
 				vars.sb.Clear();
 				//ReadStringType.UTF16,
 				game.ReadString(str_ptr+0x0C, (StringBuilder)vars.sb);
@@ -2360,20 +2370,6 @@ split {
 					split = true;
 					break;
 				}
-				/*
-				vars.sb.Clear();
-				vars.sb.AppendFormat("dialog: {0}\n", temp_str);
-				print(vars.sb.ToString());
-				*/
-				//int    repeat = BitConverter.ToInt32(temp, 0x0C);
-				//0x08
-				//IntPtr strptr = (IntPtr)BitConverter.ToInt32(data_array, i + 0x08);
-				//int repeat = BitConverter.ToInt32(data_array, i + 0x08 + pointer_size);
-				//vars.sb.AppendFormat("str_ptr_{0} : {1}\n", processed_dialogues, strptr);
-				//vars.sb.AppendFormat("repeats : {0}\n", repeat);
-				//print(vars.sb.ToString());
-				//vars.sb.Clear();
-				//break;
 			}
 		}
 
